@@ -15,3 +15,5 @@ firebase.auth().currentUser.getIdToken(/* forceRefresh */ true).then(function(id
 }).catch(function(error) {
   // Handle error
 });
+
+
