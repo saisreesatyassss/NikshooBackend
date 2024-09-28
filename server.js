@@ -22,7 +22,7 @@ admin.initializeApp({
     type: process.env.FIREBASE_TYPE,
     project_id: process.env.FIREBASE_PROJECT_ID,
     private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-    private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'), // Replacing the escaped newlines
+    private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
     client_email: process.env.FIREBASE_CLIENT_EMAIL,
     client_id: process.env.FIREBASE_CLIENT_ID,
     auth_uri: process.env.FIREBASE_AUTH_URI,
@@ -33,6 +33,7 @@ admin.initializeApp({
   storageBucket: 'gs://nikshoo.appspot.com', // Your storage bucket
   databaseURL: "https://nikshoo-default-rtdb.firebaseio.com/"  // Using Realtime Database URL
 });
+
 const db = admin.database(); // Realtime Database instance
 const bucket = admin.storage().bucket(); // Storage bucket instance
 
@@ -47,6 +48,33 @@ app.get('/', (req, res) => {
 });
 
 
+// Route to check Firebase connectivity
+app.get('/checkFirebase', async (req, res) => {
+  try {
+    // Check Firebase Authentication by listing users
+    const listUsersResult = await admin.auth().listUsers(1);
+    console.log('Successfully fetched user data:', listUsersResult.users[0].uid);
+
+    // Check Firebase Realtime Database by reading some test data
+    const snapshot = await db.ref('/test').once('value');
+    const testData = snapshot.val();
+
+    if (!testData) {
+      // Write test data to the database if not present
+      await db.ref('/test').set({ message: 'Firebase is working!' });
+    }
+
+    res.status(200).send({
+      message: 'Firebase is connected and working',
+      userId: listUsersResult.users[0].uid, // Display the first user's ID (if any)
+      testData: testData || { message: 'Firebase is working!' }
+    });
+  } catch (error) {
+    console.error('Error checking Firebase:', error);
+    res.status(500).send({ error: 'Failed to connect to Firebase', details: error.message });
+  }
+});
+ 
 // Endpoint to create a user
 app.post('/createUser', async (req, res) => {
   const { email, password } = req.body;
@@ -208,6 +236,142 @@ app.put('/admin/editImage', async (req, res) => {
     res.status(500).send({ error: error.message });
   }
 });
+
+
+
+
+
+app.post('/enquiry/submit', async (req, res) => {
+  console.log(req.body); // Log the request body to check what is being sent
+  
+  const { name, contactNo, location, budget, email, organisation, areaSqFt } = req.body;
+
+  if (!name || !contactNo || !location || !budget || !email || !organisation || !areaSqFt) {
+    return res.status(400).send({ error: 'Missing required fields' });
+  }
+
+  try {
+    const enquiryRef = db.ref('enquiries').push();
+    await enquiryRef.set({
+      name,
+      contactNo,
+      location,
+      budget,
+      email,
+      organisation,
+      areaSqFt,
+      createdAt: Date.now(),
+    });
+
+    res.status(200).send({ message: 'Enquiry submitted successfully' });
+  } catch (error) {
+    console.error('Error submitting enquiry:', error); // Log the error for better debugging
+    res.status(500).send({ error: 'Failed to submit enquiry' });
+  }
+});
+
+app.get('/admin/enquiry', async (req, res) => {
+  const { uid } = req.query; // Use query for GET requests
+
+  try {
+    // Verify if the user is an admin
+    const userSnapshot = await db.ref(`users/${uid}`).once('value');
+    if (userSnapshot.exists() && userSnapshot.val().isAdmin) {
+      const enquiriesSnapshot = await db.ref('enquiries').once('value');
+      const enquiries = enquiriesSnapshot.val();
+      res.status(200).send({ enquiries });
+    } else {
+      res.status(403).send({ error: 'Unauthorized access' });
+    }
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+
+
+app.delete('/admin/enquiry/:id', async (req, res) => {
+  const { uid } = req.body;
+  const { id } = req.params;
+
+  try {
+    // Verify if the user is an admin
+    const userSnapshot = await db.ref(`users/${uid}`).once('value');
+    if (userSnapshot.exists() && userSnapshot.val().isAdmin) {
+      // Delete the specific enquiry by ID
+      await db.ref(`enquiries/${id}`).remove();
+      res.status(200).send({ message: 'Enquiry deleted successfully' });
+    } else {
+      res.status(403).send({ error: 'Unauthorized access' });
+    }
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+
+
+
+app.post('/contact/submit', async (req, res) => {
+  const { fullName, phoneNumber, email, location, message } = req.body;
+
+  try {
+    // Save the form data to the database (e.g., Firebase or MongoDB)
+    const contactRef = db.ref('contacts').push();
+    await contactRef.set({
+      fullName,
+      phoneNumber,
+      email,
+      location,
+      message,
+      createdAt: Date.now(),
+    });
+
+    res.status(200).send({ message: 'Contact request submitted successfully' });
+  } catch (error) {
+    res.status(500).send({ error: 'Failed to submit contact request' });
+  }
+});
+
+app.get('/admin/contact', async (req, res) => {
+  const { uid } = req.body;
+
+  try {
+    // Verify if the user is an admin
+    const userSnapshot = await db.ref(`users/${uid}`).once('value');
+    if (userSnapshot.exists() && userSnapshot.val().isAdmin) {
+      const contactsSnapshot = await db.ref('contacts').once('value');
+      const contacts = contactsSnapshot.val();
+      res.status(200).send({ contacts });
+    } else {
+      res.status(403).send({ error: 'Unauthorized access' });
+    }
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+
+app.delete('/admin/contact/:id', async (req, res) => {
+  const { uid } = req.body;
+  const { id } = req.params;
+
+  try {
+    // Verify if the user is an admin
+    const userSnapshot = await db.ref(`users/${uid}`).once('value');
+    if (userSnapshot.exists() && userSnapshot.val().isAdmin) {
+      // Delete the specific contact by ID
+      await db.ref(`contacts/${id}`).remove();
+      res.status(200).send({ message: 'Contact deleted successfully' });
+    } else {
+      res.status(403).send({ error: 'Unauthorized access' });
+    }
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+
 
 // Start the server on the specified port
 app.listen(PORT, () => {
