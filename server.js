@@ -74,21 +74,27 @@ app.get('/checkFirebase', async (req, res) => {
     res.status(500).send({ error: 'Failed to connect to Firebase', details: error.message });
   }
 });
- 
+
+
+const bcrypt = require('bcryptjs'); // To hash and compare passwords
+
 // Endpoint to create a user
-app.post('/createUser', async (req, res) => {
+app.post('/createAdmin', async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    // Create user in Firebase Authentication
+    // Hash the password before storing it
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user in Firebase Authentication (without password)
     const userRecord = await admin.auth().createUser({
       email: email,
-      password: password,
     });
 
-    // Add user details to Realtime Database
+    // Add user details to Realtime Database, including hashed password
     await db.ref(`users/${userRecord.uid}`).set({
       email: email,
+      password: hashedPassword, // Store hashed password
       isAdmin: false, // Set default role as non-admin
       createdAt: admin.database.ServerValue.TIMESTAMP, // Use ServerValue for timestamp
     });
@@ -98,6 +104,41 @@ app.post('/createUser', async (req, res) => {
     res.status(500).send({ error: error.message });
   }
 });
+// Endpoint to login an admin
+app.post('/adminLogin', async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    // Verify email via Firebase Authentication
+    const userRecord = await admin.auth().getUserByEmail(email);
+
+    // Get the user data from the Realtime Database
+    const snapshot = await db.ref(`users/${userRecord.uid}`).once('value');
+    const userData = snapshot.val();
+
+    if (!userData) {
+      return res.status(404).send({ error: 'User not found' });
+    }
+
+    // Compare the entered password with the hashed password in the database
+    const isPasswordValid = await bcrypt.compare(password, userData.password);
+
+    if (!isPasswordValid) {
+      return res.status(401).send({ error: 'Invalid password' });
+    }
+
+    // Check if the user is an admin
+    if (!userData.isAdmin) {
+      return res.status(403).send({ error: 'Unauthorized: Only admins can login.' });
+    }
+
+    // Instead of generating a custom token, return the user ID
+    res.status(200).send({ message: 'Admin login successful', userId: userRecord.uid });
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
 
 // Multer setup for image upload handling
 const upload = multer({ storage: multer.memoryStorage() });
@@ -269,6 +310,7 @@ app.post('/enquiry/submit', async (req, res) => {
     res.status(500).send({ error: 'Failed to submit enquiry' });
   }
 });
+
 
 app.get('/admin/enquiry', async (req, res) => {
   const { uid } = req.query; // Use query for GET requests
