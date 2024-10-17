@@ -4,17 +4,8 @@ const admin = require('firebase-admin');
 const multer = require('multer'); // Middleware for handling multipart/form-data
 require('dotenv').config();
 console.log('FIREBASE_PRIVATE_KEY:', process.env.FIREBASE_PRIVATE_KEY); // Debug
-
-// // Path to your service account key JSON file
-// const serviceAccount = require('./config/nikshoo-firebase-adminsdk-jjn8z-e5c5c8c893.json');
-
-
-// // Initialize the Firebase Admin SDK
-// admin.initializeApp({
-//   credential: admin.credential.cert(serviceAccount),
-//   storageBucket: 'gs://nikshoo.appspot.com', // Your storage bucket
-//   databaseURL: "https://nikshoo-default-rtdb.firebaseio.com/"  // Using Realtime Database URL
-// });
+const cors = require('cors'); // Import cors middleware
+ 
 
 // Initialize the Firebase Admin SDK using environment variables
 admin.initializeApp({
@@ -41,6 +32,7 @@ const app = express();
 const PORT = process.env.PORT || 3000; // Set the port to 3000 or use an environment variable
 
 app.use(express.json());
+app.use(cors()); // This will allow requests from all origins
 
 
 app.get('/', (req, res) => {
