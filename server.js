@@ -345,6 +345,7 @@ app.put('/admin/editImage', async (req, res) => {
 
 
 
+
 app.post('/enquiry/submit', async (req, res) => {
   console.log(req.body); // Log the request body to check what is being sent
   
@@ -468,6 +469,101 @@ app.delete('/admin/contact/:id', async (req, res) => {
       // Delete the specific contact by ID
       await db.ref(`contacts/${id}`).remove();
       res.status(200).send({ message: 'Contact deleted successfully' });
+    } else {
+      res.status(403).send({ error: 'Unauthorized access' });
+    }
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+
+
+
+
+
+
+
+// Set up Multer for file uploads
+const uploadDoc = multer({
+  dest: 'uploads/', // You can specify your desired folder here
+  limits: { fileSize: 5 * 1024 * 1024 }, // Limit to 5MB files
+  fileFilter: (req, file, cb) => {
+    const fileTypes = /pdf|doc|docx/; // Allow only certain file types
+    const extname = fileTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = fileTypes.test(file.mimetype);
+
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only documents are allowed (pdf, doc, docx)!'));
+    }
+  }
+});
+
+// POST route for partner form submission
+app.post('/partner/submit', uploadDoc.single('document'), async (req, res) => {
+  const { partnerRole, partnerName, companyName, phoneNumber, email, city, comments } = req.body;
+  const document = req.file; // The uploaded file
+
+  try {
+    if (!document) {
+      return res.status(400).send({ error: 'Document upload required' });
+    }
+
+    // Save the form data and document info to the database (e.g., Firebase, MongoDB)
+    const partnerRef = db.ref('partners').push();
+    await partnerRef.set({
+      partnerRole,
+      partnerName,
+      companyName,
+      phoneNumber,
+      email,
+      city,
+      comments,
+      documentPath: document.path, // Path to where the document is stored
+      documentName: document.originalname, // Original file name
+      createdAt: Date.now(),
+    });
+
+    res.status(200).send({ message: 'Partner request submitted successfully' });
+  } catch (error) {
+    res.status(500).send({ error: 'Failed to submit partner request' });
+  }
+});
+
+
+
+
+app.get('/admin/partner', async (req, res) => {
+  const { uid } = req.query;
+
+  try {
+    // Verify if the user is an admin
+    const userSnapshot = await db.ref(`users/${uid}`).once('value');
+    if (userSnapshot.exists() && userSnapshot.val().isAdmin) {
+      const partnersSnapshot = await db.ref('partners').once('value');
+      const partners = partnersSnapshot.val();
+      res.status(200).send({ partners });
+    } else {
+      res.status(403).send({ error: 'Unauthorized access' });
+    }
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+app.delete('/admin/partner/:id', async (req, res) => {
+  const { uid } = req.query;
+  const { id } = req.params;
+
+  try {
+    // Verify if the user is an admin
+    const userSnapshot = await db.ref(`users/${uid}`).once('value');
+    if (userSnapshot.exists() && userSnapshot.val().isAdmin) {
+      // Delete the specific partner entry by ID
+      await db.ref(`partners/${id}`).remove();
+      res.status(200).send({ message: 'Partner deleted successfully' });
     } else {
       res.status(403).send({ error: 'Unauthorized access' });
     }
