@@ -138,7 +138,7 @@ const { v4: uuidv4 } = require('uuid'); // To generate unique IDs for file names
 
 // Endpoint for admin to upload images
 app.post('/admin/uploadImage', upload.single('image'), async (req, res) => {
-  const { uid } = req.body; // Get user ID for admin verification
+    const { uid } = req.query; // Get user ID for admin verification
   const file = req.file; // Image file
 
   try {
@@ -177,7 +177,7 @@ app.post('/admin/uploadImage', upload.single('image'), async (req, res) => {
 
 // Endpoint for admin to upload multiple images
 app.post('/admin/uploadImages', upload.array('images', 10), async (req, res) => { // Max 10 images can be uploaded
-  const { uid } = req.body; // Get user ID for admin verification
+    const { uid } = req.query; // Get user ID for admin verification
   const files = req.files; // Array of image files
 
   try {
@@ -325,7 +325,7 @@ app.get('/admin/enquiry', async (req, res) => {
 
 
 app.delete('/admin/enquiry/:id', async (req, res) => {
-  const { uid } = req.body;
+    const { uid } = req.query;
   const { id } = req.params;
 
   try {
@@ -368,7 +368,7 @@ app.post('/contact/submit', async (req, res) => {
 });
 
 app.get('/admin/contact', async (req, res) => {
-  const { uid } = req.body;
+    const { uid } = req.query;
 
   try {
     // Verify if the user is an admin
@@ -387,7 +387,7 @@ app.get('/admin/contact', async (req, res) => {
 
 
 app.delete('/admin/contact/:id', async (req, res) => {
-  const { uid } = req.body;
+    const { uid } = req.query;
   const { id } = req.params;
 
   try {
