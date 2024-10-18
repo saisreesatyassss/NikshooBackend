@@ -481,16 +481,14 @@ app.delete('/admin/contact/:id', async (req, res) => {
 
 
 
+const path = require('path'); // Make sure to include the 'path' module
 
-
-
-
-// Multer setup for file uploads
+// Multer setup for file uploads (documents)
 const uploadDoc = multer({
-  dest: 'uploads/', // Make sure the 'uploads' folder exists or create it
+  storage: multer.memoryStorage(), // Temporarily store the document in memory
   limits: { fileSize: 5 * 1024 * 1024 }, // Limit to 5MB files
   fileFilter: (req, file, cb) => {
-    const fileTypes = /pdf|doc|docx/; // Allow only certain file types
+    const fileTypes = /pdf|doc|docx/; // Allow only PDF, DOC, DOCX
     const extname = fileTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = fileTypes.test(file.mimetype);
 
@@ -518,27 +516,46 @@ app.post('/partner/submit', uploadDoc.single('document'), async (req, res) => {
       return res.status(400).send({ error: 'All fields are required' });
     }
 
-    // Save the form data and document info to the database (e.g., Firebase)
-    const partnerRef = db.ref('partners').push();
-    await partnerRef.set({
-      partnerRole,
-      partnerName,
-      companyName,
-      phoneNumber,
-      email,
-      city,
-      comments: comments || '', // Optional comments
-      documentPath: document.path, // Path to where the document is stored
-      documentName: document.originalname, // Original file name
-      createdAt: Date.now(),
+    // Generate a new filename by appending the partner's phone number
+    const newFileName = `${phoneNumber}-${document.originalname}`;
+    const blob = bucket.file(newFileName);
+    const blobStream = blob.createWriteStream({
+      metadata: {
+        contentType: document.mimetype,
+      },
     });
 
-    res.status(200).send({ message: 'Partner request submitted successfully' });
+    blobStream.on('finish', async () => {
+      // Make the document public or keep private based on your needs
+      await blob.makePublic(); // You can remove this line if the document should remain private
+
+      // Save the form data and document info to Firebase database
+      const partnerRef = db.ref('partners').push();
+      await partnerRef.set({
+        partnerRole,
+        partnerName,
+        companyName,
+        phoneNumber,
+        email,
+        city,
+        comments: comments || '', // Optional comments
+        documentUrl: `https://storage.googleapis.com/${bucket.name}/${newFileName}`, // Public URL
+        documentName: document.originalname, // Original file name
+        uploadedFileName: newFileName, // File name with phone number
+        createdAt: Date.now(),
+      });
+
+      res.status(200).send({ message: 'Partner request submitted successfully', documentUrl: `https://storage.googleapis.com/${bucket.name}/${newFileName}` });
+    });
+
+    // End the stream and upload the document
+    blobStream.end(document.buffer);
   } catch (error) {
     console.error('Error submitting partner request:', error.message);
     res.status(500).send({ error: 'Failed to submit partner request' });
   }
 });
+
 
 // GET route to fetch partner data for admin
 app.get('/admin/partner', async (req, res) => {
