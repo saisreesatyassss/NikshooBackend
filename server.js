@@ -96,6 +96,8 @@ app.post('/createAdmin', async (req, res) => {
     res.status(500).send({ error: error.message });
   }
 });
+
+
 // Endpoint to login an admin
 app.post('/adminLogin', async (req, res) => {
   const { email, password } = req.body;
@@ -130,6 +132,75 @@ app.post('/adminLogin', async (req, res) => {
     res.status(500).send({ error: error.message });
   }
 });
+
+
+
+
+
+
+
+
+
+
+// Endpoint to get all users and change user roles
+app.get('/admin/users', async (req, res) => {
+  const { uid } = req.query; // Get admin UID from query parameters
+
+  try {
+    // Verify that the user is an admin (implement your own admin verification logic)
+    const adminUser = await db.ref(`users/${uid}`).once('value');
+    if (!adminUser.exists() || !adminUser.val().isAdmin) {
+      return res.status(403).send({ error: 'Access denied. User is not an admin.' });
+    }
+
+    // Fetch all users from the database
+    const usersSnapshot = await db.ref('users').once('value');
+    const users = [];
+
+    usersSnapshot.forEach(userSnapshot => {
+      const userData = userSnapshot.val();
+      users.push({
+        uid: userSnapshot.key,
+        email: userData.email,
+        isAdmin: userData.isAdmin,
+        createdAt: userData.createdAt,
+      });
+    });
+
+    res.status(200).send(users);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Endpoint to change user role to admin
+app.post('/admin/changeRole', async (req, res) => {
+  const { uid, userId, role } = req.body; // Get admin UID, target user ID, and new role
+
+  try {
+    // Verify that the user is an admin (implement your own admin verification logic)
+    const adminUser = await db.ref(`users/${uid}`).once('value');
+    if (!adminUser.exists() || !adminUser.val().isAdmin) {
+      return res.status(403).send({ error: 'Access denied. User is not an admin.' });
+    }
+
+    // Update the user's role
+    await db.ref(`users/${userId}`).update({
+      isAdmin: role === 'admin',
+    });
+
+    res.status(200).send({ message: 'User role updated successfully' });
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+
+
+
+
+
+
 
 
 // Multer setup for image upload handling
