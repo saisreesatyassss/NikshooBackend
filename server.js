@@ -484,95 +484,130 @@ app.delete('/admin/contact/:id', async (req, res) => {
 
 
 
-// // Set up Multer for file uploads
-// const uploadDoc = multer({
-//   dest: 'uploads/', // You can specify your desired folder here
-//   limits: { fileSize: 5 * 1024 * 1024 }, // Limit to 5MB files
-//   fileFilter: (req, file, cb) => {
-//     const fileTypes = /pdf|doc|docx/; // Allow only certain file types
-//     const extname = fileTypes.test(path.extname(file.originalname).toLowerCase());
-//     const mimetype = fileTypes.test(file.mimetype);
 
-//     if (mimetype && extname) {
-//       return cb(null, true);
-//     } else {
-//       cb(new Error('Only documents are allowed (pdf, doc, docx)!'));
-//     }
-//   }
-// });
+// Multer setup for file uploads
+const uploadDoc = multer({
+  dest: 'uploads/', // Make sure the 'uploads' folder exists or create it
+  limits: { fileSize: 5 * 1024 * 1024 }, // Limit to 5MB files
+  fileFilter: (req, file, cb) => {
+    const fileTypes = /pdf|doc|docx/; // Allow only certain file types
+    const extname = fileTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = fileTypes.test(file.mimetype);
 
-// // POST route for partner form submission
-// app.post('/partner/submit', uploadDoc.single('document'), async (req, res) => {
-//   const { partnerRole, partnerName, companyName, phoneNumber, email, city, comments } = req.body;
-//   const document = req.file; // The uploaded file
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only documents are allowed (pdf, doc, docx)!'));
+    }
+  }
+});
 
-//   try {
-//     if (!document) {
-//       return res.status(400).send({ error: 'Document upload required' });
-//     }
+// POST route for partner form submission
+app.post('/partner/submit', uploadDoc.single('document'), async (req, res) => {
+  const { partnerRole, partnerName, companyName, phoneNumber, email, city, comments } = req.body;
+  const document = req.file; // The uploaded file
 
-//     // Save the form data and document info to the database (e.g., Firebase, MongoDB)
-//     const partnerRef = db.ref('partners').push();
-//     await partnerRef.set({
-//       partnerRole,
-//       partnerName,
-//       companyName,
-//       phoneNumber,
-//       email,
-//       city,
-//       comments,
-//       documentPath: document.path, // Path to where the document is stored
-//       documentName: document.originalname, // Original file name
-//       createdAt: Date.now(),
-//     });
+  try {
+    // Check if document is uploaded
+    if (!document) {
+      return res.status(400).send({ error: 'Document upload required' });
+    }
 
-//     res.status(200).send({ message: 'Partner request submitted successfully' });
-//   } catch (error) {
-//     res.status(500).send({ error: 'Failed to submit partner request' });
-//   }
-// });
+    // Ensure all required fields are provided
+    if (!partnerRole || !partnerName || !companyName || !phoneNumber || !email || !city) {
+      return res.status(400).send({ error: 'All fields are required' });
+    }
 
+    // Save the form data and document info to the database (e.g., Firebase)
+    const partnerRef = db.ref('partners').push();
+    await partnerRef.set({
+      partnerRole,
+      partnerName,
+      companyName,
+      phoneNumber,
+      email,
+      city,
+      comments: comments || '', // Optional comments
+      documentPath: document.path, // Path to where the document is stored
+      documentName: document.originalname, // Original file name
+      createdAt: Date.now(),
+    });
 
+    res.status(200).send({ message: 'Partner request submitted successfully' });
+  } catch (error) {
+    console.error('Error submitting partner request:', error.message);
+    res.status(500).send({ error: 'Failed to submit partner request' });
+  }
+});
 
+// GET route to fetch partner data for admin
+app.get('/admin/partner', async (req, res) => {
+  const { uid } = req.query;
 
-// app.get('/admin/partner', async (req, res) => {
-//   const { uid } = req.query;
+  try {
+    if (!uid) {
+      return res.status(400).send({ error: 'User ID is required' });
+    }
 
-//   try {
-//     // Verify if the user is an admin
-//     const userSnapshot = await db.ref(`users/${uid}`).once('value');
-//     if (userSnapshot.exists() && userSnapshot.val().isAdmin) {
-//       const partnersSnapshot = await db.ref('partners').once('value');
-//       const partners = partnersSnapshot.val();
-//       res.status(200).send({ partners });
-//     } else {
-//       res.status(403).send({ error: 'Unauthorized access' });
-//     }
-//   } catch (error) {
-//     res.status(500).send({ error: error.message });
-//   }
-// });
+    // Verify if the user is an admin
+    const userSnapshot = await db.ref(`users/${uid}`).once('value');
+    if (!userSnapshot.exists()) {
+      return res.status(404).send({ error: 'User not found' });
+    }
 
-// app.delete('/admin/partner/:id', async (req, res) => {
-//   const { uid } = req.query;
-//   const { id } = req.params;
+    const user = userSnapshot.val();
+    if (!user.isAdmin) {
+      return res.status(403).send({ error: 'Unauthorized access' });
+    }
 
-//   try {
-//     // Verify if the user is an admin
-//     const userSnapshot = await db.ref(`users/${uid}`).once('value');
-//     if (userSnapshot.exists() && userSnapshot.val().isAdmin) {
-//       // Delete the specific partner entry by ID
-//       await db.ref(`partners/${id}`).remove();
-//       res.status(200).send({ message: 'Partner deleted successfully' });
-//     } else {
-//       res.status(403).send({ error: 'Unauthorized access' });
-//     }
-//   } catch (error) {
-//     res.status(500).send({ error: error.message });
-//   }
-// });
+    // Fetch all partner data
+    const partnersSnapshot = await db.ref('partners').once('value');
+    const partners = partnersSnapshot.val();
 
+    res.status(200).send({ partners });
+  } catch (error) {
+    console.error('Error fetching partner data:', error.message);
+    res.status(500).send({ error: 'Failed to fetch partner data' });
+  }
+});
 
+// DELETE route to remove a partner entry
+app.delete('/admin/partner/:id', async (req, res) => {
+  const { uid } = req.query;
+  const { id } = req.params;
+
+  try {
+    if (!uid) {
+      return res.status(400).send({ error: 'User ID is required' });
+    }
+
+    // Verify if the user is an admin
+    const userSnapshot = await db.ref(`users/${uid}`).once('value');
+    if (!userSnapshot.exists()) {
+      return res.status(404).send({ error: 'User not found' });
+    }
+
+    const user = userSnapshot.val();
+    if (!user.isAdmin) {
+      return res.status(403).send({ error: 'Unauthorized access' });
+    }
+
+    // Delete the specific partner entry by ID
+    const partnerRef = db.ref(`partners/${id}`);
+    const partnerSnapshot = await partnerRef.once('value');
+    if (!partnerSnapshot.exists()) {
+      return res.status(404).send({ error: 'Partner not found' });
+    }
+
+    await partnerRef.remove();
+    res.status(200).send({ message: 'Partner deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting partner entry:', error.message);
+    res.status(500).send({ error: 'Failed to delete partner' });
+  }
+});
+
+ 
 
 // Start the server on the specified port
 app.listen(PORT, () => {
