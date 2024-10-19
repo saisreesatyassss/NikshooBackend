@@ -207,99 +207,105 @@ app.post('/admin/changeRole', async (req, res) => {
 const upload = multer({ storage: multer.memoryStorage() });
 const { v4: uuidv4 } = require('uuid'); // To generate unique IDs for file names
 
+
 // Endpoint for admin to upload images
 app.post('/admin/uploadImage', upload.single('image'), async (req, res) => {
     const { uid } = req.query; // Get user ID for admin verification
-  const file = req.file; // Image file
+    const { rename } = req.body; // New image name from the request body
+    const file = req.file; // Image file
 
-  try {
-    // Check if the user is an admin
-    const userSnapshot = await db.ref(`users/${uid}`).once('value');
-    if (userSnapshot.exists() && userSnapshot.val().isAdmin) {
-      // Create a unique filename using uuid
-      const uniqueFileName = `${uuidv4()}-${file.originalname}`;
-      const blob = bucket.file(uniqueFileName);
-      const blobStream = blob.createWriteStream({
-        metadata: {
-          contentType: file.mimetype,
-        },
-      });
+    try {
+        // Check if the user is an admin
+        const userSnapshot = await db.ref(`users/${uid}`).once('value');
+        if (userSnapshot.exists() && userSnapshot.val().isAdmin) {
+            // If the admin provided a "rename" value, use it; otherwise, use the original filename
+            const newFileName = rename ? `${uuidv4()}-${rename}` : `${uuidv4()}-${file.originalname}`;
+            const blob = bucket.file(newFileName);
+            const blobStream = blob.createWriteStream({
+                metadata: {
+                    contentType: file.mimetype,
+                },
+            });
 
-     blobStream.on('finish', async () => {
-      // Make the file public
-      await blob.makePublic();
+            blobStream.on('finish', async () => {
+                // Make the file public
+                await blob.makePublic();
 
-      res.status(200).send({
-        message: 'Image uploaded successfully',
-        imageUrl: `https://storage.googleapis.com/${bucket.name}/${uniqueFileName}`
-      });
-    });
+                res.status(200).send({
+                    message: 'Image uploaded successfully',
+                    imageUrl: `https://storage.googleapis.com/${bucket.name}/${newFileName}`
+                });
+            });
 
-
-      blobStream.end(file.buffer);
-    } else {
-      res.status(403).send({ error: 'User is not authorized to upload images' });
+            // Upload the file buffer to the storage
+            blobStream.end(file.buffer);
+        } else {
+            res.status(403).send({ error: 'User is not authorized to upload images' });
+        }
+    } catch (error) {
+        res.status(500).send({ error: error.message });
     }
-  } catch (error) {
-    res.status(500).send({ error: error.message });
-  }
 });
 
 
 // Endpoint for admin to upload multiple images
 app.post('/admin/uploadImages', upload.array('images', 10), async (req, res) => { // Max 10 images can be uploaded
     const { uid } = req.query; // Get user ID for admin verification
-  const files = req.files; // Array of image files
+    const { renames } = req.body; // Array of rename values
+    const files = req.files; // Array of image files
 
-  try {
-    // Check if the user is an admin
-    const userSnapshot = await db.ref(`users/${uid}`).once('value');
-    if (userSnapshot.exists() && userSnapshot.val().isAdmin) {
-      let imageUrls = [];
+    try {
+        // Check if the user is an admin
+        const userSnapshot = await db.ref(`users/${uid}`).once('value');
+        if (userSnapshot.exists() && userSnapshot.val().isAdmin) {
+            let imageUrls = [];
 
-      // Loop through each file and upload it
-      for (const file of files) {
-        // Create a unique filename using uuid
-        const uniqueFileName = `${uuidv4()}-${file.originalname}`;
-        const blob = bucket.file(uniqueFileName);
-        const blobStream = blob.createWriteStream({
-          metadata: {
-            contentType: file.mimetype,
-          },
-        });
+            // Loop through each file and upload it
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                // Use the rename from the request body if provided, otherwise use the original filename
+                const rename = renames && renames[i] ? renames[i] : file.originalname;
+                // Create a unique filename using uuid
+                const uniqueFileName = `${uuidv4()}-${rename}`;
+                const blob = bucket.file(uniqueFileName);
+                const blobStream = blob.createWriteStream({
+                    metadata: {
+                        contentType: file.mimetype,
+                    },
+                });
 
-        // Use promises to handle each file upload
-        await new Promise((resolve, reject) => {
-          blobStream.on('finish', async () => {
-            try {
-              // Make the file public
-              await blob.makePublic();
-              const imageUrl = `https://storage.googleapis.com/${bucket.name}/${uniqueFileName}`;
-              imageUrls.push(imageUrl); // Add the image URL to the array
-              resolve();
-            } catch (error) {
-              reject(error);
+                // Use promises to handle each file upload
+                await new Promise((resolve, reject) => {
+                    blobStream.on('finish', async () => {
+                        try {
+                            // Make the file public
+                            await blob.makePublic();
+                            const imageUrl = `https://storage.googleapis.com/${bucket.name}/${uniqueFileName}`;
+                            imageUrls.push(imageUrl); // Add the image URL to the array
+                            resolve();
+                        } catch (error) {
+                            reject(error);
+                        }
+                    });
+
+                    blobStream.on('error', (error) => {
+                        reject(error);
+                    });
+
+                    blobStream.end(file.buffer);
+                });
             }
-          });
 
-          blobStream.on('error', (error) => {
-            reject(error);
-          });
-
-          blobStream.end(file.buffer);
-        });
-      }
-
-      res.status(200).send({
-        message: 'Images uploaded successfully',
-        imageUrls: imageUrls, // Return all the uploaded image URLs
-      });
-    } else {
-      res.status(403).send({ error: 'User is not authorized to upload images' });
+            res.status(200).send({
+                message: 'Images uploaded successfully',
+                imageUrls: imageUrls, // Return all the uploaded image URLs
+            });
+        } else {
+            res.status(403).send({ error: 'User is not authorized to upload images' });
+        }
+    } catch (error) {
+        res.status(500).send({ error: error.message });
     }
-  } catch (error) {
-    res.status(500).send({ error: error.message });
-  }
 });
 
 
@@ -308,8 +314,11 @@ app.post('/admin/uploadImages', upload.array('images', 10), async (req, res) => 
 app.get('/admin/images', async (req, res) => {
   try {
     const [files] = await bucket.getFiles(); // Get all files in the bucket
-    const imageUrls = files.map(file => `https://storage.googleapis.com/${bucket.name}/${file.name}`);
-    res.status(200).send(imageUrls);
+    const imageUrls = files.map(file => ({
+      fileName: file.name, // Include the file name in the response
+      imageUrl: `https://storage.googleapis.com/${bucket.name}/${file.name}` // Image URL
+    }));
+    res.status(200).send(imageUrls); // Return the array of images with their names and URLs
   } catch (error) {
     res.status(500).send({ error: error.message });
   }
@@ -317,15 +326,20 @@ app.get('/admin/images', async (req, res) => {
 
 // Endpoint to delete an image
 app.delete('/admin/deleteImage', async (req, res) => {
-  const { imageName } = req.body;  
+  const { imageName } = req.body; // Image name to delete
 
   try {
-    await bucket.file(imageName).delete();  
+    await bucket.file(imageName).delete(); // Delete the specified image
     res.status(200).send({ message: 'Image deleted successfully' });
   } catch (error) {
-    res.status(500).send({ error: error.message });
+    if (error.code === 404) {
+      res.status(404).send({ error: 'Image not found' }); // Handle if the image does not exist
+    } else {
+      res.status(500).send({ error: error.message });
+    }
   }
 });
+
 
 // Endpoint to edit an image (update metadata)
 app.put('/admin/editImage', async (req, res) => {
