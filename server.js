@@ -340,20 +340,38 @@ app.delete('/admin/deleteImage', async (req, res) => {
   }
 });
 
-
 // Endpoint to edit an image (update metadata)
 app.put('/admin/editImage', async (req, res) => {
   const { imageName, newName } = req.body; // Name of the image to edit and new name
 
   try {
     const file = bucket.file(imageName);
-    await file.copy(bucket.file(newName)); // Copy to new name
-    await file.delete(); // Delete old file
-    res.status(200).send({ message: 'Image renamed successfully' });
+    
+    // Check if the file exists
+    const [exists] = await file.exists();
+    if (!exists) {
+      return res.status(404).send({ message: 'Image not found' });
+    }
+
+    // Get metadata of the old image
+    const [metadata] = await file.getMetadata();
+
+    // Copy the old image to a new file with the same metadata
+    const newFile = bucket.file(newName);
+    await file.copy(newFile); // Copy the file to new name
+
+    // Set metadata on the new file to match the old one
+    await newFile.setMetadata(metadata);
+
+    // Delete the old file
+    await file.delete(); 
+
+    res.status(200).send({ message: 'Image renamed successfully with same metadata and permissions' });
   } catch (error) {
     res.status(500).send({ error: error.message });
   }
 });
+
 
 
 
