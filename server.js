@@ -340,33 +340,59 @@ app.delete('/admin/deleteImage', async (req, res) => {
   }
 });
 
-// Endpoint to edit an image (update metadata)
-app.put('/admin/editImage', async (req, res) => {
-  const { imageName, newName } = req.body; // Name of the image to edit and new name
+
+// Endpoint to edit an image (upload a new image and replace the old one)
+app.put('/admin/editImage', upload.single('image'), async (req, res) => {
+  const { uid } = req.query; // Get user ID for admin verification
+  const { rename } = req.body; // New image name from the request body
+  const file = req.file; // New image file
+
+  if (!file) {
+    return res.status(400).send({ error: 'No image uploaded' });
+  }
 
   try {
-    const file = bucket.file(imageName);
-    
-    // Check if the file exists
-    const [exists] = await file.exists();
-    if (!exists) {
-      return res.status(404).send({ message: 'Image not found' });
+    // Check if the user is an admin
+    const userSnapshot = await db.ref(`users/${uid}`).once('value');
+    if (!userSnapshot.exists() || !userSnapshot.val().isAdmin) {
+      return res.status(403).send({ error: 'User is not authorized to upload images' });
     }
 
-    // Get metadata of the old image
-    const [metadata] = await file.getMetadata();
+    // Define the name for the new file
+    const newFileName = rename ? `${uuidv4()}-${rename}` : `${uuidv4()}-${file.originalname}`;
+    const oldFileName = rename; // Use the provided rename as the old file name
 
-    // Copy the old image to a new file with the same metadata
-    const newFile = bucket.file(newName);
-    await file.copy(newFile); // Copy the file to new name
+    const oldFile = bucket.file(oldFileName);
 
-    // Set metadata on the new file to match the old one
-    await newFile.setMetadata(metadata);
+    // Check if the old file exists
+    const [exists] = await oldFile.exists();
+    if (!exists) {
+      return res.status(404).send({ message: 'Old image not found' });
+    }
 
     // Delete the old file
-    await file.delete(); 
+    await oldFile.delete();
 
-    res.status(200).send({ message: 'Image renamed successfully with same metadata and permissions' });
+    // Create a new file reference for the new image
+    const newFile = bucket.file(newFileName);
+    const blobStream = newFile.createWriteStream({
+      metadata: {
+        contentType: file.mimetype,
+      },
+    });
+
+    blobStream.on('finish', async () => {
+      // Make the new file public
+      await newFile.makePublic();
+
+      res.status(200).send({
+        message: 'Image replaced successfully',
+        imageUrl: `https://storage.googleapis.com/${bucket.name}/${newFileName}`,
+      });
+    });
+
+    // Upload the file buffer to the storage
+    blobStream.end(file.buffer);
   } catch (error) {
     res.status(500).send({ error: error.message });
   }
