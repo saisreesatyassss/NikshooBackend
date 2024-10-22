@@ -684,6 +684,64 @@ app.delete('/admin/partner/:id', async (req, res) => {
 
  
 
+
+// Endpoint to create Contact Information 2 (Admin only)
+app.post('/api/contact-info-2', async (req, res) => {
+  const { address, phone, email } = req.body;
+
+  try {
+    await db.ref('contactInfo2').set({ address, phone, email });
+    res.json({ message: 'Contact Information 2 created successfully' });
+  } catch (error) {
+    console.error("Error creating contact info 2:", error);
+    res.status(500).json({ error: 'Failed to create contact information' });
+  }
+});
+
+// Endpoint to update Contact Information 2 (Admin only)
+app.put('/api/contact-info-2', async (req, res) => {
+  const { address, phone, email } = req.body;
+
+  try {
+    const ref = db.ref('contactInfo2');
+    const snapshot = await ref.once('value');
+    
+    if (snapshot.exists()) {
+      await ref.update({ address, phone, email });
+      res.json({ message: 'Contact Information 2 updated successfully' });
+    } else {
+      res.status(404).json({ message: 'Contact Information 2 not found' });
+    }
+  } catch (error) {
+    console.error("Error updating contact info 2:", error);
+    res.status(500).json({ error: 'Failed to update contact information' });
+  }
+});
+
+// Endpoint to get Contact Information 2
+app.get('/api/contact-info-2', async (req, res) => {
+  try {
+    const snapshot = await db.ref('contactInfo2').once('value');
+    const contactInfo2 = snapshot.val();
+    res.json(contactInfo2);
+  } catch (error) {
+    console.error("Error fetching contact info 2:", error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Endpoint to delete Contact Information 2
+app.delete('/api/contact-info-2', async (req, res) => {
+  try {
+    await db.ref('contactInfo2').remove();
+    res.json({ message: 'Contact Information 2 removed successfully' });
+  } catch (error) {
+    console.error("Error deleting contact info 2:", error);
+    res.status(500).json({ error: 'Failed to remove contact information' });
+  }
+});
+
+
 // Start the server on the specified port
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
