@@ -682,7 +682,95 @@ app.delete('/admin/partner/:id', async (req, res) => {
   }
 });
 
- 
+
+
+
+
+
+
+
+
+
+
+// Endpoint to create Contact Information 1 with multiple addresses (Admin only)
+app.post('/api/contact-info-1', async (req, res) => {
+  const { email, phone, whatsapp, addresses } = req.body;
+
+  try {
+    await db.ref('contactInfo1').set({ email, phone, whatsapp, addresses });
+    res.json({ message: 'Contact Information 1 created successfully' });
+  } catch (error) {
+    console.error("Error creating contact info 1:", error);
+    res.status(500).json({ error: 'Failed to create contact information' });
+  }
+});
+
+// Endpoint to update Contact Information 1 (Admin only)
+app.put('/api/contact-info-1', async (req, res) => {
+  const { email, phone, whatsapp, addresses } = req.body;
+
+  try {
+    const ref = db.ref('contactInfo1');
+    const snapshot = await ref.once('value');
+    
+    if (snapshot.exists()) {
+      await ref.update({ email, phone, whatsapp, addresses });
+      res.json({ message: 'Contact Information 1 updated successfully' });
+    } else {
+      res.status(404).json({ message: 'Contact Information 1 not found' });
+    }
+  } catch (error) {
+    console.error("Error updating contact info 1:", error);
+    res.status(500).json({ error: 'Failed to update contact information' });
+  }
+});
+
+
+// Endpoint to get Contact Information 1
+app.get('/api/contact-info-1', async (req, res) => {
+  try {
+    const snapshot = await db.ref('contactInfo1').once('value');
+    const contactInfo1 = snapshot.val();
+    res.json(contactInfo1);
+  } catch (error) {
+    console.error("Error fetching contact info 1:", error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
+// Endpoint to delete Contact Information 1
+app.delete('/api/contact-info-1', async (req, res) => {
+  try {
+    await db.ref('contactInfo1').remove();
+    res.json({ message: 'Contact Information 1 removed successfully' });
+  } catch (error) {
+    console.error("Error deleting contact info 1:", error);
+    res.status(500).json({ error: 'Failed to remove contact information' });
+  }
+});
+
+
+// {
+//   "email": "contact@nikshoo.com",
+//   "phone": "+919123456789",
+//   "whatsapp": "+919123456789",
+//   "addresses": [
+//     {
+//       "state": "Madhya Pradesh",
+//       "address": "123 Innovation Drive, Tech City, Indore"
+//     },
+//     {
+//       "state": "Haryana",
+//       "address": "123 Innovation Drive, Tech City, Gurugram"
+//     }
+//   ]
+// }
+
+
+
+
+
 
 
 // Endpoint to create Contact Information 2 (Admin only)
