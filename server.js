@@ -412,7 +412,7 @@ app.post('/enquiry/submit', async (req, res) => {
   if (!name || !contactNo || !location || !budget || !email || !organisation || !areaSqFt) {
     return res.status(400).send({ error: 'Missing required fields' });
   }
-
+//name concet email 
   try {
     const enquiryRef = db.ref('enquiries').push();
     await enquiryRef.set({
@@ -828,6 +828,66 @@ app.delete('/api/contact-info-2', async (req, res) => {
     res.status(500).json({ error: 'Failed to remove contact information' });
   }
 });
+
+
+
+
+// POST endpoint to create a form submission
+app.post('/api/form-submission', async (req, res) => {
+  const { fullName, phoneNumber, email, location = '', message = '', space = '' } = req.body;
+
+  // Validate required fields
+  if (!fullName || !phoneNumber || !email) {
+    return res.status(400).json({ error: 'Full name, phone number, and email are required' });
+  }
+
+  try {
+    // Use Firebase's push() to create a unique ID for each submission
+    const ref = db.ref('formSubmissions').push();
+    await ref.set({ fullName, phoneNumber, location, message, email, space });
+    res.json({ message: 'Form submission created successfully', id: ref.key });
+  } catch (error) {
+    console.error("Error creating form submission:", error);
+    res.status(500).json({ error: 'Failed to create form submission' });
+  }
+});
+
+// GET endpoint to retrieve all form submissions or filter by space
+app.get('/api/form-submissions', async (req, res) => {
+  const { space } = req.query;
+
+  try {
+    const ref = db.ref('formSubmissions');
+    const snapshot = await ref.once('value');
+    const submissions = snapshot.val();
+
+    // Filter by space if specified in query
+    const filteredSubmissions = space
+      ? Object.entries(submissions || {}).filter(([_, data]) => data.space === space)
+      : Object.entries(submissions || {});
+
+    res.json(filteredSubmissions.map(([id, data]) => ({ id, ...data })));
+  } catch (error) {
+    console.error("Error retrieving form submissions:", error);
+    res.status(500).json({ error: 'Failed to retrieve form submissions' });
+  }
+});
+
+// DELETE endpoint to delete a specific form submission by ID
+app.delete('/api/form-submissions/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const ref = db.ref(`formSubmissions/${id}`);
+    await ref.remove();
+    res.json({ message: 'Form submission deleted successfully' });
+  } catch (error) {
+    console.error("Error deleting form submission:", error);
+    res.status(500).json({ error: 'Failed to delete form submission' });
+  }
+});
+
+
 
 
 // Start the server on the specified port
