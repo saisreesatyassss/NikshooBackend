@@ -407,7 +407,7 @@ app.put('/admin/editImage', upload.single('image'), async (req, res) => {
 app.post('/enquiry/submit', async (req, res) => {
   console.log(req.body); // Log the request body to check what is being sent
   
-  const { name, contactNo, location, budget, email, organisation, areaSqFt } = req.body;
+  const { name, contactNo, location= '', budget= '', email, organisation= '', areaSqFt= '' } = req.body;
 
   if (!name || !contactNo || !location || !budget || !email || !organisation || !areaSqFt) {
     return res.status(400).send({ error: 'Missing required fields' });
@@ -477,7 +477,7 @@ app.delete('/admin/enquiry/:id', async (req, res) => {
 
 
 app.post('/contact/submit', async (req, res) => {
-  const { fullName, phoneNumber, email, location, message } = req.body;
+  const { fullName, phoneNumber, email, location = '', message= '' } = req.body;
 
   try {
     // Save the form data to the database (e.g., Firebase or MongoDB)
@@ -560,7 +560,12 @@ const uploadDoc = multer({
 
 // POST route for partner form submission
 app.post('/partner/submit', uploadDoc.single('document'), async (req, res) => {
-  const { partnerRole, partnerName, companyName, phoneNumber, email, city, comments } = req.body;
+ const { partnerRole, partnerName, companyName, phoneNumber, email, city = '', comments = '' } = req.body;
+
+  // Validate required fields
+  if (!partnerRole || !partnerName || !companyName || !phoneNumber || !email) {
+    return res.status(400).json({ error: 'Partner role, partner name, company name, phone number, and email are required' });
+  }
   const document = req.file; // The uploaded file
 
   try {
