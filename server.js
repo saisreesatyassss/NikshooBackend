@@ -858,18 +858,19 @@ app.post('/api/form-submission', async (req, res) => {
 });
 
 // GET endpoint to retrieve all form submissions or filter by space
+// GET endpoint to retrieve all form submissions or filter by space
 app.get('/api/form-submissions', async (req, res) => {
   const { space } = req.query;
 
   try {
     const ref = db.ref('formSubmissions');
     const snapshot = await ref.once('value');
-    const submissions = snapshot.val();
+    const submissions = snapshot.val() || {};
 
     // Filter by space if specified in query
     const filteredSubmissions = space
-      ? Object.entries(submissions || {}).filter(([_, data]) => data.space === space)
-      : Object.entries(submissions || {});
+      ? Object.entries(submissions).filter(([_, data]) => data.space === space)
+      : Object.entries(submissions);
 
     res.json(filteredSubmissions.map(([id, data]) => ({ id, ...data })));
   } catch (error) {
