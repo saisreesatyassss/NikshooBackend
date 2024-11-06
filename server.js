@@ -896,6 +896,125 @@ app.delete('/api/form-submissions/:id', async (req, res) => {
 
 
 
+
+
+// Step 1: Admin uploads the image and retrieves the URL
+// POST /admin/uploadImage (already defined in your code above)
+// This endpoint will return an `imageUrl` that can be used when creating/updating a blog post.
+
+// Step 2: Create a new blog post with the `imageUrl` obtained
+app.post('/blog/create', async (req, res) => {
+  const { imageUrl, title, date, text } = req.body;
+
+  try {
+    const blogRef = db.ref('blogs').push();
+    await blogRef.set({
+      image: imageUrl,  // Store the image URL here
+      title,
+      date,
+      text,
+      createdAt: Date.now(),
+    });
+
+    res.status(201).send({ message: 'Blog entry created successfully' });
+  } catch (error) {
+    res.status(500).send({ error: 'Failed to create blog entry' });
+  }
+});
+
+// Step 3: Update a blog post to include a new image URL
+app.put('/blog/:id', async (req, res) => {
+  const { id } = req.params;
+  const { imageUrl, title, date, text } = req.body;
+
+  try {
+    const blogRef = db.ref(`blogs/${id}`);
+    const blogSnapshot = await blogRef.once('value');
+
+    if (blogSnapshot.exists()) {
+      await blogRef.update({
+        image: imageUrl,  // Update the image URL here if provided
+        title,
+        date,
+        text,
+        updatedAt: Date.now(),
+      });
+      res.status(200).send({ message: 'Blog entry updated successfully' });
+    } else {
+      res.status(404).send({ error: 'Blog entry not found' });
+    }
+  } catch (error) {
+    res.status(500).send({ error: 'Failed to update blog entry' });
+  }
+});
+
+
+// Get all blog entries
+app.get('/blog', async (req, res) => {
+  try {
+    const blogsSnapshot = await db.ref('blogs').once('value');
+    const blogs = blogsSnapshot.val();
+    res.status(200).send({ blogs });
+  } catch (error) {
+    res.status(500).send({ error: 'Failed to retrieve blog entries' });
+  }
+});
+
+// Get a single blog entry by ID
+app.get('/blog/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const blogSnapshot = await db.ref(`blogs/${id}`).once('value');
+    if (blogSnapshot.exists()) {
+      res.status(200).send(blogSnapshot.val());
+    } else {
+      res.status(404).send({ error: 'Blog entry not found' });
+    }
+  } catch (error) {
+    res.status(500).send({ error: 'Failed to retrieve blog entry' });
+  }
+});
+
+
+
+// Delete a blog entry by ID (and optionally its image from storage)
+app.delete('/blog/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const blogRef = db.ref(`blogs/${id}`);
+    const blogSnapshot = await blogRef.once('value');
+
+    if (blogSnapshot.exists()) {
+      const blogData = blogSnapshot.val();
+
+      // Delete the image from storage if it exists
+      if (blogData.image) {
+        const imageUrl = blogData.image;
+        const fileName = imageUrl.split('/').pop(); // Extract filename from URL
+        const file = bucket.file(fileName);
+
+        await file.delete().catch((error) => {
+          console.error('Error deleting image:', error);
+        });
+      }
+
+      // Delete the blog entry from the database
+      await blogRef.remove();
+      res.status(200).send({ message: 'Blog entry deleted successfully' });
+    } else {
+      res.status(404).send({ error: 'Blog entry not found' });
+    }
+  } catch (error) {
+    res.status(500).send({ error: 'Failed to delete blog entry' });
+  }
+});
+
+
+
+
+
 // Start the server on the specified port
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
